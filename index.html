@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fill-in-the-Blank Quiz</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom, #ccff99, #ffffff);
+    }
+    header {
+      background: #ccff66;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #title {
+      flex-grow: 1;
+      text-align: center;
+      font-size: 28px;
+      font-weight: bold;
+      color: #333;
+    }
+    .quiz-container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      min-height: 600px;
+    }
+    .input-field {
+      margin: 10px;
+      padding: 10px;
+      font-size: 22px;
+      width: 200px;
+    }
+    .button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      background: #007BFF;
+      color: white;
+    }
+    .circle-button {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      margin-left: 8px;
+      cursor: pointer;
+      background-color: #007BFF;
+      color: white;
+      font-size: 14px;
+    }
+    .progress-bar { width: 100%; background: #ddd; border-radius: 10px; margin-top: 20px; }
+    .progress { height: 20px; background: #4CAF50; border-radius: 10px; width: 0%; }
+    .hidden { display: none; }
+    #question { font-size: 26px; margin-bottom: 20px; }
+    #translation { font-size: 20px; margin-top: 15px; }
+    #qNumber { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <label id="nameLabel">名前: <input type="text" id="username" placeholder="Your name"></label>
+    <div id="title">English Quiz</div>
+    <div>
+      <button class="button hidden" id="retryBtn">Retry Incorrect Questions</button>
+      <button class="button hidden" id="pdfAllBtn">Download All Results PDF</button>
+      <button class="button hidden" id="pdfWrongBtn">Download Wrong Answers PDF</button>
+    </div>
+  </header>
+
+  <div class="quiz-container">
+    <div id="qNumber"></div>
+    <div id="question"></div>
+    <div id="inputs"></div>
+    <button class="button" id="submitBtn">Submit</button>
+    <button class="button hidden" id="nextBtn">Next</button>
+    <button class="button hidden" id="showAllBtn">Show All Results</button>
+    <div id="feedback"></div>
+    <div id="translation"></div>
+    <div class="progress-bar" id="progressBar"><div class="progress" id="progress"></div></div>
+    <div id="scoreBoard"></div>
+  </div>
+
+  <script>
+    const questions = [
+      { sentence: "The capital of Japan is ___ and it is famous for the Skytree.", answers: ["Tokyo"], translation: "The capital of Japan is Tokyo and it is famous for the Skytree.", jpTranslation: "日本の首都は東京で、スカイツリーが有名です。", blanksTranslation: ["東京"] },
+      { sentence: "Patients are ___ to infection just after surgery.", answers: ["vulnerable"], translation: "Patients are vulnerable to infection just after surgery.", jpTranslation: "患者は手術の直後、感染症にかかりやすくなる。", blanksTranslation: ["かかりやすい"] },
+      { sentence: "Make sure to ___ all the warning signs.", answers: ["heed"], translation: "Make sure to heed all the warning signs.", jpTranslation: "すべての警戒標識に気をつけるようにしてください。", blanksTranslation: ["気をつける"] }
+    ];
+
+    let current = 0, score = 0;
+    let userAnswers = [], incorrectQuestions = [], retryMode = false;
+
+    const qEl = document.getElementById("question");
+    const qNumberEl = document.getElementById("qNumber");
+    const inputEl = document.getElementById("inputs");
+    const feedbackEl = document.getElementById("feedback");
+    const translationEl = document.getElementById("translation");
+    const progressEl = document.getElementById("progress");
+    const progressBar = document.getElementById("progressBar");
+    const scoreBoard = document.getElementById("scoreBoard");
+    const pdfAllBtn = document.getElementById("pdfAllBtn");
+    const pdfWrongBtn = document.getElementById("pdfWrongBtn");
+    const retryBtn = document.getElementById("retryBtn");
+    const showAllBtn = document.getElementById("showAllBtn");
+    const nameLabel = document.getElementById("nameLabel");
+
+    function loadQuestion() {
+      const q = questions[current];
+      qEl.textContent = q.sentence;
+      qNumberEl.textContent = `Q${current + 1} / ${questions.length}`;
+      inputEl.innerHTML = "";
+      feedbackEl.textContent = "";
+      translationEl.textContent = "";
+
+      q.answers.forEach((_, i) => {
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "input-field";
+        inp.id = "ans" + i;
+        inputEl.appendChild(inp);
+      });
+
+      document.getElementById("submitBtn").classList.remove("hidden");
+      document.getElementById("nextBtn").classList.add("hidden");
+
+      progressEl.style.width = `${(current / questions.length) * 100}%`;
+    }
+
+    function checkAnswer() {
+      const q = questions[current];
+      let correct = true, answersGiven = [];
+
+      q.answers.forEach((ans, i) => {
+        const userAns = document.getElementById("ans" + i).value.trim();
+        answersGiven.push(userAns);
+        if (userAns.toLowerCase() !== ans.toLowerCase()) correct = false;
+      });
+
+      userAnswers.push({ question: q.sentence, user: answersGiven, correct: q.answers });
+
+      if (correct) { feedbackEl.textContent = "✅ Correct!"; score++; }
+      else { feedbackEl.textContent = "❌ Incorrect!"; incorrectQuestions.push(q); }
+
+      let highlighted = q.translation;
+      q.answers.forEach(ans => {
+        const regex = new RegExp(`\\b${ans}\\b`, "gi");
+        highlighted = highlighted.replace(regex, `<span style="color:red;">${ans}</span>`);
+      });
+
+      translationEl.innerHTML = `
+        <p><b>英文:</b> ${highlighted}</p>
+        <p><b>答え:</b> ${q.answers.join(", ")}</p>
+        <p><b>和訳:</b> ${q.jpTranslation}</p>
+        <p><b>答えの和訳:</b> ${q.blanksTranslation.join(", ")}</p>
+      `;
+
+      document.getElementById("submitBtn").classList.add("hidden");
+      document.getElementById("nextBtn").classList.remove("hidden");
+    }
+
+    function nextQuestion() {
+      current++;
+      if (current < questions.length) {
+        loadQuestion();
+      } else {
+        progressEl.style.width = "100%";
+        scoreBoard.textContent = `Your score: ${score} / ${questions.length}`;
+        progressBar.classList.add("hidden");
+        showAllBtn.classList.remove("hidden");
+        nameLabel.classList.add("hidden");
+      }
+    }
+
+    function showAllResults() {
+      qEl.textContent = "All Results";
+      qNumberEl.textContent = "";
+      inputEl.innerHTML = "";
+      feedbackEl.textContent = "";
+      translationEl.innerHTML = "";
+
+      const username = document.getElementById("username").value.trim();
+      translationEl.innerHTML = `<p><b>Name:</b> ${username || "(No name)"}</p>
+                                 <p><b>Score:</b> ${score} / ${questions.length}</p>`;
+
+      userAnswers.forEach((entry, idx) => {
+        const div = document.createElement("div");
+        div.style.textAlign = "left";
+        div.style.margin = "10px";
+        div.innerHTML = `
+          <p><b>Q${idx + 1}:</b> ${entry.question}</p>
+          <p>Your Answer: ${entry.user.join(", ")} | Correct: ${entry.correct.join(", ")}</p>
+        `;
+        translationEl.appendChild(div);
+      });
+
+      pdfAllBtn.classList.remove("hidden");
+      pdfWrongBtn.classList.remove("hidden");
+      if (incorrectQuestions.length > 0 && !retryMode) retryBtn.classList.remove("hidden");
+
+      showAllBtn.classList.add("hidden");
+      document.getElementById("nextBtn").classList.add("hidden");
+    }
+
+    function downloadPDF(all = true) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const username = document.getElementById("username").value.trim();
+
+      doc.setFontSize(14);
+      doc.text("Quiz Results", 10, 10);
+      if (username) doc.text(`Name: ${username}`, 150, 10);
+      doc.text(`Score: ${score} / ${questions.length}`, 10, 20);
+
+      let y = 30;
+      const target = all ? userAnswers : userAnswers.filter((_, idx) => {
+        return !userAnswers[idx].user.every((ans, i) =>
+          ans.toLowerCase() === userAnswers[idx].correct[i].toLowerCase()
+        );
+      });
+
+      target.forEach((entry, idx) => {
+        const linesQ = doc.splitTextToSize(`${idx + 1}. Question: ${entry.question}`, 180);
+        doc.text(linesQ, 10, y); y += linesQ.length * 8;
+
+        const linesU = doc.splitTextToSize(`Your Answer: ${entry.user.join(", ")}`, 180);
+        doc.text(linesU, 10, y); y += linesU.length * 8;
+
+        const linesC = doc.splitTextToSize(`Correct Answer: ${entry.correct.join(", ")}`, 180);
+        doc.text(linesC, 10, y); y += linesC.length * 8 + 5;
+
+        if (y > 270) { doc.addPage(); y = 20; }
+      });
+
+      doc.save(all ? "quiz_all_results.pdf" : "quiz_wrong_results.pdf");
+    }
+
+    pdfAllBtn.onclick = () => downloadPDF(true);
+    pdfWrongBtn.onclick = () => downloadPDF(false);
+    document.getElementById("submitBtn").onclick = checkAnswer;
+    document.getElementById("nextBtn").onclick = nextQuestion;
+    showAllBtn.onclick = showAllResults;
+
+    loadQuestion();
+  </script>
+</body>
+</html>
