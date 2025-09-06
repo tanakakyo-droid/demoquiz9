@@ -190,7 +190,7 @@
         <p><b>答えの和訳:</b> ${q.blanksTranslation.join(", ")}</p>
       `;
 
-      // 音声ボタン
+      // 🔊 音声ボタン追加
       const speakBtnSentence = document.createElement("button");
       speakBtnSentence.textContent = "🔊";
       speakBtnSentence.className = "circle-button";
@@ -309,7 +309,7 @@
       current = 0;
       userAnswers = [];
       score = 0;
-      incorrectQuestions = []; // リトライで再度集計
+      incorrectQuestions = [];
       loadQuestion();
       retryBtn.classList.add("hidden");
       pdfBtn.classList.add("hidden");
